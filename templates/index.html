@@ -1,0 +1,327 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Community Chess Game</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/chessboard-1.0.0.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .board-container {
+            flex: 1;
+            min-width: 300px;
+        }
+        .info-container {
+            flex: 1;
+            min-width: 300px;
+        }
+        .move-list {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        #board {
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 20px;
+        }
+        .game-status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+        }
+        .history-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 3px solid #ccc;
+        }
+        .winner {
+            font-weight: bold;
+            color: green;
+        }
+        .game-over {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #555;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .turn-indicator {
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .refresh-button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .refresh-button:hover {
+            background-color: #45a049;
+        }
+        .highlight-square {
+            background-color: rgba(255, 255, 0, 0.4) !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Community Chess Game</h1>
+    <p>This is a shared chess game where everyone can make moves. All players see and play on the same board.</p>
+    
+    <button id="refreshButton" class="refresh-button">Refresh Game State</button>
+    
+    <div class="container">
+        <div class="board-container">
+            <div id="board"></div>
+            <div id="status" class="game-status">Loading game...</div>
+            <div id="turnIndicator" class="turn-indicator"></div>
+        </div>
+        
+        <div class="info-container">
+            <h2>Move History</h2>
+            <div id="moveList" class="move-list"></div>
+            
+            <h2>Game Rules</h2>
+            <ul>
+                <li>This is a single shared game visible to all visitors</li>
+                <li>Anyone can make a legal chess move</li>
+                <li>Moves must follow standard chess rules</li>
+                <li>When a game ends, the winner is acknowledged and a new game starts</li>
+                <li>Click to select a piece, then click a destination square to move</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div>
+        <h2>Completed Games</h2>
+        <div id="gameHistory"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/chessboard-1.0.0.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let board = null;
+            let game = new Chess();
+            let $status = $('#status');
+            let $turnIndicator = $('#turnIndicator');
+            let $moveList = $('#moveList');
+            let $gameHistory = $('#gameHistory');
+            let userClicks = [];
+            
+            // Initialize the board
+            function initBoard(fen = 'start') {
+                const config = {
+                    position: fen,
+                    draggable: false,
+                    // Using direct CDN paths for pieces that are known to work
+                    pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
+                };
+                
+                // If board already exists, destroy it first
+                if (board) board.destroy();
+                
+                board = Chessboard('board', config);
+                
+                // Re-attach click event after board is created
+                $('#board .square-55d63').off('click').on('click', onBoardClick);
+            }
+            
+            // Handle clicks on the board
+            function onBoardClick(event) {
+                const square = $(event.currentTarget).attr('data-square');
+                
+                // First click: select a piece
+                if (userClicks.length === 0) {
+                    // Highlight the selected square
+                    $(".square-55d63").removeClass('highlight-square');
+                    $(event.currentTarget).addClass('highlight-square');
+                    userClicks.push(square);
+                    return;
+                }
+                
+                // Second click: make a move
+                if (userClicks.length === 1) {
+                    const move = userClicks[0] + square;
+                    userClicks = [];
+                    $(".square-55d63").removeClass('highlight-square');
+                    
+                    // Make the move through the API
+                    makeMoveApi(move);
+                }
+            }
+            
+            // Make a move through the API
+            function makeMoveApi(move) {
+                fetch('/api/move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ move: move })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        return;
+                    }
+                    
+                    // Update board with new position
+                    fetchGameState();
+                    
+                    // Check for game over
+                    if (data.is_game_over) {
+                        let message = '';
+                        if (data.winner === 'White') {
+                            message = 'Game over! White wins by checkmate.';
+                        } else if (data.winner === 'Black') {
+                            message = 'Game over! Black wins by checkmate.';
+                        } else {
+                            message = 'Game over! It\'s a draw.';
+                        }
+                        
+                        $status.text(message);
+                        $status.removeClass('status-active').addClass('game-over');
+                        
+                        setTimeout(() => {
+                            alert(message + ' A new game has started.');
+                            fetchGameState();
+                            loadGameHistory();
+                        }, 1000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to make move. Please try again.');
+                });
+            }
+            
+            // Fetch the current game state
+            function fetchGameState() {
+                fetch('/api/game')
+                .then(response => response.json())
+                .then(data => {
+                    // Update the board position
+                    initBoard(data.fen);
+                    
+                    // Re-attach click handlers after board update
+                    $('#board .square-55d63').off('click').on('click', onBoardClick);
+                    
+                    // Update the game state
+                    const isWhiteTurn = data.turn === 'white';
+                    $turnIndicator.text('Current turn: ' + (isWhiteTurn ? 'White' : 'Black'));
+                    
+                    // Update status
+                    if (data.is_checkmate) {
+                        $status.text('Checkmate!');
+                        $status.removeClass('status-active').addClass('game-over');
+                    } else if (data.is_stalemate) {
+                        $status.text('Game over! Stalemate');
+                        $status.removeClass('status-active').addClass('game-over');
+                    } else if (data.is_check) {
+                        $status.text('Check!');
+                        $status.removeClass('game-over').addClass('status-active');
+                    } else {
+                        $status.text('Game in progress');
+                        $status.removeClass('game-over').addClass('status-active');
+                    }
+                    
+                    // Update move history
+                    $moveList.empty();
+                    data.move_history.forEach(move => {
+                        $moveList.append($('<div>').text(move));
+                    });
+                    $moveList.scrollTop($moveList[0].scrollHeight);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    $status.text('Error loading game');
+                });
+            }
+            
+            // Load game history
+            function loadGameHistory() {
+                fetch('/api/games')
+                .then(response => response.json())
+                .then(games => {
+                    $gameHistory.empty();
+                    
+                    if (games.length === 0) {
+                        $gameHistory.append($('<p>').text('No completed games yet.'));
+                        return;
+                    }
+                    
+                    games.forEach(game => {
+                        const $game = $('<div>').addClass('history-item');
+                        const startDate = new Date(game.start_time).toLocaleString();
+                        const endDate = game.end_time ? new Date(game.end_time).toLocaleString() : 'In progress';
+                        
+                        $game.append($('<p>').text(`Game #${game.id} - Started: ${startDate}, Ended: ${endDate}`));
+                        
+                        if (game.winner) {
+                            const $winner = $('<p>').addClass('winner').text(`Winner: ${game.winner}`);
+                            $game.append($winner);
+                        } else if (game.end_time) {
+                            $game.append($('<p>').text('Result: Draw'));
+                        }
+                        
+                        $gameHistory.append($game);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    $gameHistory.text('Error loading game history');
+                });
+            }
+            
+            // Initialize the board
+            initBoard();
+            
+            // Load initial game state
+            fetchGameState();
+            loadGameHistory();
+            
+            // Set up refresh button
+            $('#refreshButton').on('click', function() {
+                fetchGameState();
+                loadGameHistory();
+            });
+            
+            // Auto-refresh every 5 seconds
+            setInterval(fetchGameState, 5000);
+        });
+    </script>
+</body>
+</html>
