@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shared Community Chess Game</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/chessboard-1.0.0.min.css" rel="stylesheet">
+    <!-- Fixed CSS link for chessboard -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -125,10 +126,10 @@
         <div id="gameHistory"></div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Updated Scripts with correct sources -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboardjs/1.0.0/chessboard-1.0.0.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     
     <script>
         $(document).ready(function() {
@@ -140,22 +141,33 @@
             let $gameHistory = $('#gameHistory');
             let userClicks = [];
             
-            // Initialize the board
+            // Initialize the board with error handling
             function initBoard(fen = 'start') {
-                const config = {
-                    position: fen,
-                    draggable: false,
-                    // Using direct CDN paths for pieces that are known to work
-                    pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
-                };
-                
-                // If board already exists, destroy it first
-                if (board) board.destroy();
-                
-                board = Chessboard('board', config);
-                
-                // Re-attach click event after board is created
-                $('#board .square-55d63').off('click').on('click', onBoardClick);
+                try {
+                    if (typeof Chessboard === 'undefined') {
+                        console.error('Chessboard library not loaded!');
+                        $status.text('Error: Chess library not loaded. Please check console and refresh.');
+                        return;
+                    }
+                    
+                    const config = {
+                        position: fen,
+                        draggable: false,
+                        pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png'
+                    };
+                    
+                    // If board already exists, destroy it first
+                    if (board) board.destroy();
+                    
+                    board = Chessboard('board', config);
+                    
+                    // Re-attach click event after board is created
+                    $('#board .square-55d63').off('click').on('click', onBoardClick);
+                    console.log('Board initialized successfully with position:', fen);
+                } catch (e) {
+                    console.error('Board initialization error:', e);
+                    $status.text('Error setting up the board: ' + e.message);
+                }
             }
             
             // Handle clicks on the board
@@ -184,6 +196,7 @@
             
             // Make a move through the API
             function makeMoveApi(move) {
+                console.log('Attempting to make move:', move);
                 fetch('/api/move', {
                     method: 'POST',
                     headers: {
@@ -191,8 +204,12 @@
                     },
                     body: JSON.stringify({ move: move })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('API Response Status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Move API Response:', data);
                     if (data.error) {
                         alert('Error: ' + data.error);
                         return;
@@ -223,16 +240,22 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
+                    console.error('Error making move:', error);
                     alert('Failed to make move. Please try again.');
                 });
             }
             
             // Fetch the current game state
             function fetchGameState() {
+                console.log('Fetching game state...');
                 fetch('/api/game')
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Game State API Response Status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('Game State Data:', data);
+                    
                     // Update the board position
                     initBoard(data.fen);
                     
@@ -266,16 +289,21 @@
                     $moveList.scrollTop($moveList[0].scrollHeight);
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    $status.text('Error loading game');
+                    console.error('Error fetching game state:', error);
+                    $status.text('Error loading game. Check console for details.');
                 });
             }
             
             // Load game history
             function loadGameHistory() {
+                console.log('Loading game history...');
                 fetch('/api/games')
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Game History API Response Status:', response.status);
+                    return response.json();
+                })
                 .then(games => {
+                    console.log('Game History Data:', games);
                     $gameHistory.empty();
                     
                     if (games.length === 0) {
@@ -301,26 +329,40 @@
                     });
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    $gameHistory.text('Error loading game history');
+                    console.error('Error loading game history:', error);
+                    $gameHistory.text('Error loading game history. Check console for details.');
                 });
             }
             
-            // Initialize the board
-            initBoard();
-            
-            // Load initial game state
-            fetchGameState();
-            loadGameHistory();
-            
-            // Set up refresh button
-            $('#refreshButton').on('click', function() {
-                fetchGameState();
-                loadGameHistory();
-            });
-            
-            // Auto-refresh every 5 seconds
-            setInterval(fetchGameState, 5000);
+            // Add a small delay before initialization to ensure all scripts are loaded
+            setTimeout(function() {
+                try {
+                    console.log('Starting initialization...');
+                    console.log('Chessboard loaded:', typeof Chessboard !== 'undefined');
+                    console.log('Chess.js loaded:', typeof Chess !== 'undefined');
+                    
+                    // Initialize the board
+                    initBoard();
+                    
+                    // Load initial game state
+                    fetchGameState();
+                    loadGameHistory();
+                    
+                    // Set up refresh button
+                    $('#refreshButton').on('click', function() {
+                        fetchGameState();
+                        loadGameHistory();
+                    });
+                    
+                    // Auto-refresh every 5 seconds
+                    setInterval(fetchGameState, 5000);
+                    
+                    console.log('Initialization complete');
+                } catch (e) {
+                    console.error('Initialization error:', e);
+                    $status.text('Error initializing game: ' + e.message);
+                }
+            }, 500);
         });
     </script>
 </body>
