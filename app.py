@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, request, jsonify, render_template
 import chess
 import chess.pgn
@@ -173,9 +172,22 @@ def make_move():
         # Convert UCI to a chess.Move object
         move = chess.Move.from_uci(move_uci)
         
+        # Check if it's the correct player's turn
+        source_square = move_uci[:2]
+        piece = board.piece_at(chess.parse_square(source_square))
+        
+        if not piece:
+            return jsonify({'error': 'No piece at the selected square'}), 400
+            
+        is_white_piece = piece.color == chess.WHITE
+        is_white_turn = board.turn == chess.WHITE
+        
+        if is_white_piece != is_white_turn:
+            return jsonify({'error': f"It's {'White' if is_white_turn else 'Black'}'s turn to move"}), 400
+        
         # Verify the move is legal
         if move not in board.legal_moves:
-            return jsonify({'error': 'Illegal move'}), 400
+            return jsonify({'error': 'This move is not allowed according to chess rules'}), 400
         
         # Get move in SAN notation for logging
         move_san = board.san(move)
@@ -311,4 +323,4 @@ def get_pgn_from_moves(game_id):
     return str(game)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

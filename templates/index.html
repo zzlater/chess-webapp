@@ -117,6 +117,7 @@
                 <li>Moves must follow standard chess rules</li>
                 <li>When a game ends, the winner is acknowledged and a new game starts</li>
                 <li>Click to select a piece, then click a destination square to move</li>
+                <li>You can only move pieces of the current player's color</li>
             </ul>
         </div>
     </div>
@@ -140,6 +141,7 @@
             let $moveList = $('#moveList');
             let $gameHistory = $('#gameHistory');
             let userClicks = [];
+            let currentTurn = 'white'; // Track the current turn
             
             // Initialize the board with error handling
             function initBoard(fen = 'start') {
@@ -153,7 +155,7 @@
                     const config = {
                         position: fen,
                         draggable: false,
-                        pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png'
+                        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
                     };
                     
                     // If board already exists, destroy it first
@@ -176,10 +178,26 @@
                 
                 // First click: select a piece
                 if (userClicks.length === 0) {
-                    // Highlight the selected square
-                    $(".square-55d63").removeClass('highlight-square');
-                    $(event.currentTarget).addClass('highlight-square');
-                    userClicks.push(square);
+                    // Get the piece on the square
+                    const squareElement = $(event.currentTarget);
+                    const hasPiece = squareElement.find('.piece-417db').length > 0;
+                    
+                    // Check if there's a piece
+                    if (hasPiece) {
+                        const isPieceWhite = squareElement.find('.piece-417db').hasClass('white-1e1d7');
+                        const isWhiteTurn = currentTurn === 'white';
+                        
+                        // If trying to move opponent's piece
+                        if ((isPieceWhite !== isWhiteTurn)) {
+                            alert("It's " + (isWhiteTurn ? "White" : "Black") + "'s turn to move.");
+                            return;
+                        }
+                        
+                        // Highlight the selected square
+                        $(".square-55d63").removeClass('highlight-square');
+                        $(event.currentTarget).addClass('highlight-square');
+                        userClicks.push(square);
+                    }
                     return;
                 }
                 
@@ -211,7 +229,14 @@
                 .then(data => {
                     console.log('Move API Response:', data);
                     if (data.error) {
-                        alert('Error: ' + data.error);
+                        // Provide more specific error messages
+                        if (data.error.includes("turn to move")) {
+                            alert(data.error);
+                        } else if (data.error === 'This move is not allowed according to chess rules') {
+                            alert('This move is not allowed. Please try a different move.');
+                        } else {
+                            alert('Error: ' + data.error);
+                        }
                         return;
                     }
                     
@@ -255,6 +280,9 @@
                 })
                 .then(data => {
                     console.log('Game State Data:', data);
+                    
+                    // Store current turn
+                    currentTurn = data.turn;
                     
                     // Update the board position
                     initBoard(data.fen);
