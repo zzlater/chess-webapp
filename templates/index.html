@@ -184,11 +184,13 @@
                     
                     // Check if there's a piece
                     if (hasPiece) {
-                        const isPieceWhite = squareElement.find('.piece-417db').hasClass('white-1e1d7');
+                        const pieceData = squareElement.find('.piece-417db').attr('data-piece'); // e.g., "wP" or "bR"
+                        const isPieceWhite = pieceData && pieceData.startsWith('w');
                         const isWhiteTurn = currentTurn === 'white';
                         
                         // If trying to move opponent's piece
-                        if ((isPieceWhite !== isWhiteTurn)) {
+                        // FIXED: Changed the condition to check if the piece color doesn't match the current turn
+                        if (isPieceWhite != isWhiteTurn) {
                             alert("It's " + (isWhiteTurn ? "White" : "Black") + "'s turn to move.");
                             return;
                         }
